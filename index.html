@@ -3,16 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32-C3 Dijital Tartı</title>
+    <title>ESP32-C3 BLE Tartı</title>
     <style>
-        body { font-family: 'Segoe UI', Arial, sans-serif; background: #eceff1; text-align: center; padding: 20px; }
-        .card { background: white; max-width: 400px; margin: auto; padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eceff1; text-align: center; padding: 20px; }
+        .card { background: white; max-width: 400px; margin: auto; padding: 25px; border-radius: 20px; box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
         h2 { color: #37474f; margin-bottom: 5px; }
-        .status { font-size: 14px; color: #78909c; margin-bottom: 25px; font-weight: bold; }
-        .weight-display { font-size: 64px; font-weight: bold; color: #1e88e5; margin: 20px 0; background: #e3f2fd; padding: 20px; border-radius: 15px; }
-        .unit { font-size: 24px; color: #5c6bc0; }
-        .btn { border: none; padding: 15px 25px; font-size: 18px; border-radius: 10px; cursor: pointer; width: 100%; margin-top: 10px; font-weight: bold; transition: 0.2s; }
-        .btn-connect { background: #4caf50; color: white; }
+        .status { font-size: 14px; color: #78909c; margin-bottom: 20px; font-weight: bold; }
+        
+        .weight-box { background: #e3f2fd; padding: 20px; border-radius: 15px; margin: 15px 0; }
+        .weight-val { font-size: 58px; font-weight: bold; color: #1565c0; line-height: 1; }
+        .unit { font-size: 22px; color: #42a5f5; }
+        .raw-val { font-size: 13px; color: #78909c; margin-top: 10px; font-family: monospace; }
+        
+        .btn { border: none; padding: 14px 20px; font-size: 16px; border-radius: 10px; cursor: pointer; width: 100%; margin-top: 10px; font-weight: bold; transition: 0.2s; }
+        .btn-connect { background: #0288d1; color: white; }
         .btn-tare { background: #ff9800; color: white; display: none; }
     </style>
 </head>
@@ -22,11 +26,12 @@
     <h2>BLE Dijital Tartı</h2>
     <div id="status" class="status">Bağlantı Bekleniyor...</div>
 
-    <div class="weight-display">
-        <span id="weight">0</span> <span class="unit">g</span>
+    <div class="weight-box">
+        <div class="weight-val"><span id="weight">0.0</span> <span class="unit">g</span></div>
+        <div class="raw-val">Ham Veri (Raw): <span id="raw">0</span></div>
     </div>
 
-    <button id="btnConnect" class="btn btn-connect" onclick="connectBLE()">Tartıya Bağlan</button>
+    <button id="btnConnect" class="btn btn-connect" onclick="connectBLE()">Bluetooth Cihazları Tara & Bağlan</button>
     <button id="btnTare" class="btn btn-tare" onclick="sendTare()">DARA AL (SIFIRLA)</button>
 </div>
 
@@ -38,9 +43,11 @@
 
     async function connectBLE() {
         try {
-            document.getElementById('status').innerText = "Cihaz Aranıyor...";
+            document.getElementById('status').innerText = "Aranıyor...";
+            
+            // Tüm Bluetooth cihazlarını listeler (Filtre kısıtlaması yok)
             const device = await navigator.bluetooth.requestDevice({
-                filters: [{ name: 'ESP32C3-Tarti' }],
+                acceptAllDevices: true,
                 optionalServices: [SERVICE_UUID]
             });
 
@@ -49,11 +56,11 @@
             const service = await server.getPrimaryService(SERVICE_UUID);
             bleCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
 
-            // Bildirimleri (Notification) Başlat
+            // Veri Akışını Başlat
             await bleCharacteristic.startNotifications();
-            bleCharacteristic.addEventListener('characteristicvaluechanged', handleWeightData);
+            bleCharacteristic.addEventListener('characteristicvaluechanged', handleData);
 
-            document.getElementById('status').innerText = "Bağlandı: " + device.name;
+            document.getElementById('status').innerText = "Bağlandı: " + (device.name || "ESP32 Tartı");
             document.getElementById('status').style.color = "#2e7d32";
             document.getElementById('btnConnect').style.display = "none";
             document.getElementById('btnTare').style.display = "block";
@@ -66,10 +73,15 @@
         }
     }
 
-    function handleWeightData(event) {
+    function handleData(event) {
         let decoder = new TextDecoder('utf-8');
-        let weightVal = decoder.decode(event.target.value);
-        document.getElementById('weight').innerText = weightVal;
+        let rawString = decoder.decode(event.target.value); // Örn: "125.4|8452100"
+        
+        let parts = rawString.split('|');
+        if (parts.length === 2) {
+            document.getElementById('weight').innerText = parts[0];
+            document.getElementById('raw').innerText = parts[1];
+        }
     }
 
     async function sendTare() {
@@ -84,7 +96,8 @@
         document.getElementById('status').style.color = "#c62828";
         document.getElementById('btnConnect').style.display = "block";
         document.getElementById('btnTare').style.display = "none";
-        document.getElementById('weight').innerText = "0";
+        document.getElementById('weight').innerText = "0.0";
+        document.getElementById('raw').innerText = "0";
     }
 </script>
 
