@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32-C3 LED & BLE Test</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eceff1; text-align: center; padding: 20px; }
+        .card { background: white; max-width: 400px; margin: auto; padding: 25px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h2 { color: #37474f; margin-bottom: 5px; }
+        .status { font-size: 14px; color: #78909c; margin-bottom: 20px; }
+        .btn-connect { background: #0288d1; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 8px; cursor: pointer; width: 100%; margin-bottom: 20px; }
+        .control-group { background: #f5f5f5; padding: 15px; border-radius: 10px; margin-bottom: 15px; text-align: left; }
+        .control-group h4 { margin: 0 0 10px 0; color: #455a64; display: flex; justify-content: space-between; align-items: center; }
+        .btn-toggle { padding: 6px 12px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .btn-on { background: #4caf50; color: white; }
+        .btn-off { background: #f44336; color: white; }
+        .slider-container { margin-top: 10px; }
+        input[type=range] { width: 100%; cursor: pointer; }
+        .val-label { font-size: 12px; color: #607d8b; float: right; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>ESP32-C3 BLE Kontrol</h2>
+    <div id="status" class="status">Bağlantı Yok</div>
+    <button class="btn-connect" onclick="connectBLE()">Tartıya / Karta Bağlan</button>
+
+    <!-- GPIO 18 KONTROL -->
+    <div class="control-group">
+        <h4>
+            GPIO 18 (LED 1)
+            <div>
+                <button class="btn-toggle btn-on" onclick="sendCmd('L18_ON')">AÇ</button>
+                <button class="btn-toggle btn-off" onclick="sendCmd('L18_OFF')">KAPAT</button>
+            </div>
+        </h4>
+        <div class="slider-container">
+            <label>Flaş Sıklığı (Hız): <span id="v18" class="val-label">500 ms</span></label>
+            <input type="range" min="50" max="2000" step="50" value="500" oninput="updateSlider('18', this.value)" onchange="sendSlider('18', this.value)">
+        </div>
+    </div>
+
+    <!-- GPIO 19 KONTROL -->
+    <div class="control-group">
+        <h4>
+            GPIO 19 (LED 2)
+            <div>
+                <button class="btn-toggle btn-on" onclick="sendCmd('L19_ON')">AÇ</button>
+                <button class="btn-toggle btn-off" onclick="sendCmd('L19_OFF')">KAPAT</button>
+            </div>
+        </h4>
+        <div class="slider-container">
+            <label>Flaş Sıklığı (Hız): <span id="v19" class="val-label">500 ms</span></label>
+            <input type="range" min="50" max="2000" step="50" value="500" oninput="updateSlider('19', this.value)" onchange="sendSlider('19', this.value)">
+        </div>
+    </div>
+</div>
+
+<script>
+    let bleCharacteristic;
+
+    async function connectBLE() {
+        try {
+            document.getElementById('status').innerText = "Aranıyor...";
+            const device = await navigator.bluetooth.requestDevice({
+                acceptAllDevices: true,
+                optionalServices: ['4fafc201-1fb5-459e-8fcc-c5c9c331914b']
+            });
+
+            const server = await device.gatt.connect();
+            const service = await server.getPrimaryService('4fafc201-1fb5-459e-8fcc-c5c9c331914b');
+            bleCharacteristic = await service.getCharacteristic('beb5483e-36e1-4688-b7f5-ea07361b26a8');
+
+            document.getElementById('status').innerText = "Bağlandı: " + device.name;
+            document.getElementById('status').style.color = "#2e7d32";
+        } catch (error) {
+            document.getElementById('status').innerText = "Hata: " + error;
+            document.getElementById('status').style.color = "#c62828";
+        }
+    }
+
+    async function sendCmd(cmd) {
+        if (bleCharacteristic) {
+            let encoder = new TextEncoder('utf-8');
+            await bleCharacteristic.writeValue(encoder.encode(cmd));
+        } else {
+            alert("Önce Bluetooth ile bağlanın!");
+        }
+    }
+
+    function updateSlider(gpio, val) {
+        document.getElementById('v' + gpio).innerText = val + " ms";
+    }
+
+    function sendSlider(gpio, val) {
+        // Karta komut gönderir (Örn: S18:200 veya S19:1000)
+        sendCmd("S" + gpio + ":" + val);
+    }
+</script>
+
+</body>
+</html>
