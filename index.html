@@ -3,100 +3,88 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32-C3 LED & BLE Test</title>
+    <title>ESP32-C3 Dijital Tartı</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eceff1; text-align: center; padding: 20px; }
-        .card { background: white; max-width: 400px; margin: auto; padding: 25px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #eceff1; text-align: center; padding: 20px; }
+        .card { background: white; max-width: 400px; margin: auto; padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
         h2 { color: #37474f; margin-bottom: 5px; }
-        .status { font-size: 14px; color: #78909c; margin-bottom: 20px; }
-        .btn-connect { background: #0288d1; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 8px; cursor: pointer; width: 100%; margin-bottom: 20px; }
-        .control-group { background: #f5f5f5; padding: 15px; border-radius: 10px; margin-bottom: 15px; text-align: left; }
-        .control-group h4 { margin: 0 0 10px 0; color: #455a64; display: flex; justify-content: space-between; align-items: center; }
-        .btn-toggle { padding: 6px 12px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
-        .btn-on { background: #4caf50; color: white; }
-        .btn-off { background: #f44336; color: white; }
-        .slider-container { margin-top: 10px; }
-        input[type=range] { width: 100%; cursor: pointer; }
-        .val-label { font-size: 12px; color: #607d8b; float: right; }
+        .status { font-size: 14px; color: #78909c; margin-bottom: 25px; font-weight: bold; }
+        .weight-display { font-size: 64px; font-weight: bold; color: #1e88e5; margin: 20px 0; background: #e3f2fd; padding: 20px; border-radius: 15px; }
+        .unit { font-size: 24px; color: #5c6bc0; }
+        .btn { border: none; padding: 15px 25px; font-size: 18px; border-radius: 10px; cursor: pointer; width: 100%; margin-top: 10px; font-weight: bold; transition: 0.2s; }
+        .btn-connect { background: #4caf50; color: white; }
+        .btn-tare { background: #ff9800; color: white; display: none; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>ESP32-C3 BLE Kontrol</h2>
-    <div id="status" class="status">Bağlantı Yok</div>
-    <button class="btn-connect" onclick="connectBLE()">Tartıya / Karta Bağlan</button>
+    <h2>BLE Dijital Tartı</h2>
+    <div id="status" class="status">Bağlantı Bekleniyor...</div>
 
-    <!-- GPIO 18 KONTROL -->
-    <div class="control-group">
-        <h4>
-            GPIO 18 (LED 1)
-            <div>
-                <button class="btn-toggle btn-on" onclick="sendCmd('L18_ON')">AÇ</button>
-                <button class="btn-toggle btn-off" onclick="sendCmd('L18_OFF')">KAPAT</button>
-            </div>
-        </h4>
-        <div class="slider-container">
-            <label>Flaş Sıklığı (Hız): <span id="v18" class="val-label">500 ms</span></label>
-            <input type="range" min="50" max="2000" step="50" value="500" oninput="updateSlider('18', this.value)" onchange="sendSlider('18', this.value)">
-        </div>
+    <div class="weight-display">
+        <span id="weight">0</span> <span class="unit">g</span>
     </div>
 
-    <!-- GPIO 19 KONTROL -->
-    <div class="control-group">
-        <h4>
-            GPIO 19 (LED 2)
-            <div>
-                <button class="btn-toggle btn-on" onclick="sendCmd('L19_ON')">AÇ</button>
-                <button class="btn-toggle btn-off" onclick="sendCmd('L19_OFF')">KAPAT</button>
-            </div>
-        </h4>
-        <div class="slider-container">
-            <label>Flaş Sıklığı (Hız): <span id="v19" class="val-label">500 ms</span></label>
-            <input type="range" min="50" max="2000" step="50" value="500" oninput="updateSlider('19', this.value)" onchange="sendSlider('19', this.value)">
-        </div>
-    </div>
+    <button id="btnConnect" class="btn btn-connect" onclick="connectBLE()">Tartıya Bağlan</button>
+    <button id="btnTare" class="btn btn-tare" onclick="sendTare()">DARA AL (SIFIRLA)</button>
 </div>
 
 <script>
+    const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+    const CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+
     let bleCharacteristic;
 
     async function connectBLE() {
         try {
-            document.getElementById('status').innerText = "Aranıyor...";
+            document.getElementById('status').innerText = "Cihaz Aranıyor...";
             const device = await navigator.bluetooth.requestDevice({
-                acceptAllDevices: true,
-                optionalServices: ['4fafc201-1fb5-459e-8fcc-c5c9c331914b']
+                filters: [{ name: 'ESP32C3-Tarti' }],
+                optionalServices: [SERVICE_UUID]
             });
 
+            document.getElementById('status').innerText = "Bağlanıyor...";
             const server = await device.gatt.connect();
-            const service = await server.getPrimaryService('4fafc201-1fb5-459e-8fcc-c5c9c331914b');
-            bleCharacteristic = await service.getCharacteristic('beb5483e-36e1-4688-b7f5-ea07361b26a8');
+            const service = await server.getPrimaryService(SERVICE_UUID);
+            bleCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+
+            // Bildirimleri (Notification) Başlat
+            await bleCharacteristic.startNotifications();
+            bleCharacteristic.addEventListener('characteristicvaluechanged', handleWeightData);
 
             document.getElementById('status').innerText = "Bağlandı: " + device.name;
             document.getElementById('status').style.color = "#2e7d32";
+            document.getElementById('btnConnect').style.display = "none";
+            document.getElementById('btnTare').style.display = "block";
+
+            device.addEventListener('gattserverdisconnected', onDisconnected);
+
         } catch (error) {
             document.getElementById('status').innerText = "Hata: " + error;
             document.getElementById('status').style.color = "#c62828";
         }
     }
 
-    async function sendCmd(cmd) {
+    function handleWeightData(event) {
+        let decoder = new TextDecoder('utf-8');
+        let weightVal = decoder.decode(event.target.value);
+        document.getElementById('weight').innerText = weightVal;
+    }
+
+    async function sendTare() {
         if (bleCharacteristic) {
             let encoder = new TextEncoder('utf-8');
-            await bleCharacteristic.writeValue(encoder.encode(cmd));
-        } else {
-            alert("Önce Bluetooth ile bağlanın!");
+            await bleCharacteristic.writeValue(encoder.encode("TARE"));
         }
     }
 
-    function updateSlider(gpio, val) {
-        document.getElementById('v' + gpio).innerText = val + " ms";
-    }
-
-    function sendSlider(gpio, val) {
-        // Karta komut gönderir (Örn: S18:200 veya S19:1000)
-        sendCmd("S" + gpio + ":" + val);
+    function onDisconnected() {
+        document.getElementById('status').innerText = "Bağlantı Kesildi!";
+        document.getElementById('status').style.color = "#c62828";
+        document.getElementById('btnConnect').style.display = "block";
+        document.getElementById('btnTare').style.display = "none";
+        document.getElementById('weight').innerText = "0";
     }
 </script>
 
